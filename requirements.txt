@@ -1,0 +1,15 @@
+langchain-anthropic
+langchain-text-splitters
+langchain-core
+langchain-community
+fastapi
+pydantic
+uvicorn
+pydantic-settings
+anthropic
+python-docx
+pypdf
+celery
+redis
+python-multipart
+beautifulsoup4

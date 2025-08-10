@@ -1,0 +1,211 @@
+# Define all services (containers) that make up the application
+services:
+  
+  # =================================================================
+  # DEVELOPMENT SERVICE - For local development with hot reload
+  # =================================================================
+  fintech-dev:
+    # Build configuration for the development container
+    build:
+      # Build context (current directory with Dockerfile)
+      context: .
+      # Use 'development' stage from multi-stage Dockerfile
+      target: development
+    
+    # Container name (what shows up in 'docker ps')
+    container_name: fintech-compliance-dev
+    
+    # Port mapping: host_port:container_port
+    ports:
+      # Map localhost:8000 to container port 8000
+      - "8000:8000"
+    
+    # Volume mounts for development (enables hot reload)
+    volumes:
+      # Mount local app directory into container for live code changes
+      # Format: host_path:container_path
+      - ./app:/Compliance_Document_Simplifier/app
+    
+    # Environment variables passed to the container
+    environment:
+      # Static environment variable
+      - environment=development
+      
+      # Dynamic environment variables from .env file
+      # Format: CONTAINER_VAR=${HOST_VAR:-default_value}
+      # Docker Compose reads .env file and substitutes these values
+      
+      # Google AI API key
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # Claude AI API key  
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Mistral AI API key
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      # Hugging Face token
+      - HF_TOKEN=${HF_TOKEN:-}
+      # Database connection string
+      - DATABASE_URL=${DATABASE_URL:-}
+      # Vector storage directory
+      - VECTOR_DIR=${VECTOR_DIR:-./vector_store}
+      # Enable debug mode for dev
+      - DEBUG=${DEBUG:-true}
+      # Langsmith tracing configuration
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-}
+    
+    # Network configuration - containers in same network can communicate
+    networks: 
+      - fintech-network
+    
+    # Profile system - only start this service when 'dev' profile is specified
+    # Usage: docker-compose --profile dev up
+    profiles:
+      - dev
+    
+    # Restart policy - restart container unless manually stopped
+    restart: unless-stopped
+
+  # =================================================================
+  # PRODUCTION SERVICE - For production deployment
+  # =================================================================
+  fintech-prod:
+    # Build configuration for production container
+    build:
+      # Same build context as dev
+      context: .
+      # Use 'production' stage from multi-stage Dockerfile
+      target: production
+    
+    # Container name for production
+    container_name: fintech-compliance-prod
+    
+    # Different port to avoid conflicts with dev (if running both)
+    ports:
+      # Map localhost:8080 to container port 8000
+      - "8080:8000"
+    
+    # Production environment variables
+    environment:
+      # Production mode settings
+      - environment=production
+      
+      # Same API keys as dev but debug is disabled
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - VECTOR_DIR=${VECTOR_DIR:-./vector_store}
+      # Disable debug in production
+      - DEBUG=${DEBUG:-false}
+    
+    # Same network as other services
+    networks:
+      - fintech-network
+    
+    # Production profile - start with: docker-compose --profile prod up
+    profiles:
+      - prod
+    
+    # Restart policy for production stability
+    restart: unless-stopped
+
+  # =================================================================
+  # REDIS SERVICE - In-memory cache (optional for future use)
+  # =================================================================
+  redis:
+    # Use official Redis Alpine image (lightweight)
+    image: redis:7-alpine
+    
+    # Container name
+    container_name: fintech-redis
+    
+    # Expose Redis default port
+    ports:
+      # Standard Redis port
+      - "6379:6379"
+    
+    # Persistent storage for Redis data
+    volumes:
+      # Mount named volume to persist data
+      - redis_data:/data
+    
+    # Network connectivity
+    networks:
+      - fintech-network
+    
+    # Available in both production and dev-with-redis profiles
+    profiles:
+      # Include in production stack
+      # - prod
+      # Or with dev when cache is needed
+      - dev-with-redis
+    
+    # Restart policy
+    restart: unless-stopped
+
+  # =================================================================
+  # POSTGRESQL SERVICE - Database (optional for future use)
+  # =================================================================
+  postgres:
+    # Use official PostgreSQL Alpine image
+    image: postgres:15-alpine
+    
+    # Container name
+    container_name: fintech-postgres
+    
+    # PostgreSQL configuration via environment variables
+    environment:
+      # Database name with fallback default
+      - POSTGRES_DB=${POSTGRES_DB:-fintech_compliance}
+      # Database user with fallback default
+      - POSTGRES_USER=${POSTGRES_USER:-fintech_user}
+      # Database password (no default for security)
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    
+    # Database port mapping
+    ports:
+      # Standard PostgreSQL port
+      - "5432:5432"
+    
+    # Persistent database storage
+    volumes:
+      # Mount volume for database files
+      - postgres_data:/var/lib/postgresql/data
+    
+    # Network connectivity
+    networks:
+      - fintech-network
+    
+    # Available in production and dev-with-db profiles
+    profiles:
+      # Include in production stack
+      # - prod
+      # Or with dev when database is needed
+      - dev-with-db
+    
+    # Restart policy
+    restart: unless-stopped
+
+# =================================================================
+# NETWORKS - Define custom networks for service communication
+# =================================================================
+networks:
+  fintech-network:
+    # Bridge driver allows container-to-container communication
+    driver: bridge
+
+# =================================================================
+# VOLUMES - Define named volumes for persistent data storage
+# =================================================================
+volumes:
+  # Redis data persistence
+  redis_data:
+    # Store on local filesystem
+    driver: local
+  
+  # PostgreSQL data persistence  
+  postgres_data:
+    # Store on local filesystem
+    driver: local
