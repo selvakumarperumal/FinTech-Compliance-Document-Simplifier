@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinTech Compliance Document Simplifier</title>
+  <meta name="description" content="Upload financial compliance documents and get plain-language summaries powered by NVIDIA AI.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <div class="app-shell">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="brand">
+        <div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div>
+        <div>
+          <h1>FinTech Simplify</h1>
+          <p>Compliance Document Simplifier</p>
+        </div>
+      </div>
+      <div class="status-pill warn" id="api-status">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting…</span>
+      </div>
+    </header>
+
+    <!-- Workspace -->
+    <main class="workspace">
+      <!-- Left Column -->
+      <section class="left-col">
+
+        <!-- Config Card -->
+        <div class="card">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-sliders"></i> Configuration</h2>
+            <button class="toggle-btn" id="toggle-settings-btn" title="Toggle Settings">
+              <i class="fa-solid fa-chevron-down"></i>
+            </button>
+          </div>
+          <div class="card-body" id="settings-body">
+            <div class="field">
+              <label for="model-select">NVIDIA LLM Model</label>
+              <div class="select-wrap">
+                <select id="model-select">
+                  <option value="minimaxai/minimax-m2" selected>Minimax M2 (Default)</option>
+                  <option value="mistralai/mixtral-8x22b-instruct-v0.1">Mixtral 8x22B Instruct</option>
+                  <option value="nvidia/llama-3.1-nemotron-51b-instruct">Llama 3.1 Nemotron 51B</option>
+                  <option value="meta/llama-3.1-8b-instruct">Llama 3.1 8B Instruct</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="uuid-input">Session UUID <span class="hint">(Optional)</span></label>
+              <div class="input-row">
+                <input type="text" id="uuid-input" placeholder="Auto-generated if empty" autocomplete="off">
+                <button class="btn-icon" id="regenerate-uuid-btn" title="Generate New UUID">
+                  <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="card">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-file-arrow-up"></i> Upload Files</h2>
+          </div>
+          <div class="card-body">
+            <div class="dropzone" id="dropzone">
+              <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt" style="display:none;">
+              <div class="dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+              <h4>Drag & drop compliance documents</h4>
+              <p>Supports PDF, DOCX, TXT — Max 20 MB</p>
+              <button class="btn btn-outline" id="browse-btn">Browse Files</button>
+            </div>
+
+            <div class="file-list-wrap" id="files-list-container" style="display:none;">
+              <div class="file-list-head">
+                <h5>Selected Files (<span id="files-count">0</span>)</h5>
+                <button class="btn-danger-ghost" id="clear-files-btn">Clear All</button>
+              </div>
+              <ul class="file-list" id="files-list"></ul>
+            </div>
+          </div>
+          <div class="card-foot">
+            <button class="btn btn-primary btn-block" id="submit-btn" disabled>
+              <span class="btn-text">Simplify Document</span>
+              <span class="spinner" id="submit-loader" style="display:none;"></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column -->
+      <section class="right-col">
+        <div class="card result-card">
+          <div class="card-head">
+            <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Simplified Output</h2>
+            <div class="result-actions" id="result-actions" style="display:none;">
+              <button class="btn btn-ghost btn-sm" id="copy-btn">
+                <i class="fa-regular fa-copy"></i> Copy
+              </button>
+              <button class="btn btn-primary btn-sm" id="download-pdf-btn">
+                <i class="fa-regular fa-file-pdf"></i> PDF
+              </button>
+              <button class="btn-icon btn-sm" id="clear-output-btn" title="Reset">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <!-- Empty State -->
+            <div class="empty" id="empty-state">
+              <div class="empty-icon"><i class="fa-solid fa-file-circle-question"></i></div>
+              <h3>Ready to Simplify</h3>
+              <p>Upload a financial compliance PDF, DOCX, or TXT document. The AI will translate legal jargon into plain, actionable language.</p>
+              <div class="tag-row">
+                <span class="tag"><i class="fa-solid fa-bullseye"></i> Translates Jargon</span>
+                <span class="tag"><i class="fa-solid fa-clock"></i> Saves Reading Time</span>
+                <span class="tag"><i class="fa-solid fa-circle-check"></i> Keeps Context</span>
+              </div>
+            </div>
+
+            <!-- Loading Skeleton -->
+            <div class="skeleton" id="loading-skeleton" style="display:none;">
+              <div class="skel-group">
+                <div class="skel-bar w-title"></div>
+                <div class="skel-bar w-sub"></div>
+              </div>
+              <div class="skel-group">
+                <div class="skel-bar w-full"></div>
+                <div class="skel-bar w-full"></div>
+                <div class="skel-bar w-75"></div>
+                <div class="skel-bar w-full"></div>
+                <div class="skel-bar w-90"></div>
+                <div class="skel-bar w-full"></div>
+                <div class="skel-bar w-60"></div>
+              </div>
+              <div class="skel-group">
+                <div class="skel-bar w-full"></div>
+                <div class="skel-bar w-90"></div>
+                <div class="skel-bar w-full"></div>
+                <div class="skel-bar w-50"></div>
+              </div>
+            </div>
+
+            <!-- Output Viewer -->
+            <div class="output" id="output-viewer" style="display:none;">
+              <div class="prose" id="output-content"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast Stack -->
+  <div class="toast-stack" id="toast-container"></div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

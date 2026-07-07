@@ -1,0 +1,22 @@
+[project]
+name = "fintech-compliance-document-simplifier"
+version = "0.1.0"
+description = "FinTech Compliance Document Simplifier using NVIDIA LLM"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "fpdf2",
+    "langchain",
+    "langchain-community",
+    "langchain-core",
+    "langchain-nvidia-ai-endpoints",
+    "langchain-text-splitters",
+    "pydantic",
+    "pydantic-settings",
+    "pypdf",
+    "python-docx",
+    "python-dotenv",
+    "python-multipart",
+    "uvicorn",
+]

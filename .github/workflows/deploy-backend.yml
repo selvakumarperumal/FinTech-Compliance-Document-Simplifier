@@ -1,0 +1,160 @@
+name: Deploy Backend to EKS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+    inputs:
+      deploy_method:
+        description: 'Deployment method'
+        required: true
+        type: choice
+        options:
+          - helm
+          - kustomize
+        default: helm
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+        default: production
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: fintech-compliance
+  EKS_CLUSTER_NAME: fintech-compliance
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.build-image.outputs.image_tag }}
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd backend
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  deploy-helm:
+    name: Deploy with Helm
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event.inputs.deploy_method == 'helm' || github.event.inputs.deploy_method == ''
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.0'
+
+      - name: Deploy with Helm
+        env:
+          ECR_REGISTRY: ${{ needs.build-and-push.outputs.ecr_registry }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+        run: |
+          helm upgrade --install fintech-simplifier \
+            ./infrastructure/backend/helm/fintech-simplifier \
+            --set image.repository=$ECR_REGISTRY/$ECR_REPOSITORY \
+            --set image.tag=$IMAGE_TAG \
+            --set secrets.nvidiaApiKey=${{ secrets.NVIDIA_API_KEY }} \
+            --set env.ENVIRONMENT=$ENVIRONMENT \
+            --set env.DEBUG=${{ github.event.inputs.environment == 'staging' && 'true' || 'false' }} \
+            --wait --timeout=5m
+
+      - name: Deployment Summary
+        run: |
+          echo "### ✅ Helm Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service URL:**" >> $GITHUB_STEP_SUMMARY
+          kubectl get svc fintech-simplifier -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' >> $GITHUB_STEP_SUMMARY || echo "Pending..." >> $GITHUB_STEP_SUMMARY
+
+  deploy-kustomize:
+    name: Deploy with Kustomize
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event.inputs.deploy_method == 'kustomize'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+      - name: Create Secrets
+        run: |
+          kubectl create secret generic fintech-secrets \
+            --from-literal=NVIDIA_API_KEY=${{ secrets.NVIDIA_API_KEY }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy with Kustomize
+        env:
+          ECR_REGISTRY: ${{ needs.build-and-push.outputs.ecr_registry }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+        run: |
+          cd infrastructure/backend/kustomize/overlays/$ENVIRONMENT
+          kustomize edit set image IMAGE_PLACEHOLDER=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          kustomize build . | kubectl apply -f -
+          
+          # Wait for rollout
+          kubectl rollout status deployment -l app=fintech-simplifier --timeout=300s
+
+      - name: Deployment Summary
+        run: |
+          echo "### ✅ Kustomize Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_STEP_SUMMARY
