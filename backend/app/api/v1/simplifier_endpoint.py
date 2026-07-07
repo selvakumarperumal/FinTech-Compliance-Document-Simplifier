@@ -87,3 +87,9 @@ async def generate_pdf_endpoint(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for status monitoring."""
+    return {"status": "ok"}

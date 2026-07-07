@@ -78,13 +78,9 @@ function removeToast(toast) {
 // --- Check API Connection ---
 async function checkApiConnection() {
   try {
-    const response = await fetch('/api/v1/upload', {
-      method: 'OPTIONS'
-    }).catch(() => {
-      return fetch('/docs', { method: 'HEAD' });
-    });
+    const response = await fetch('/api/v1/health');
     
-    if (response.ok || response.status === 405) {
+    if (response.ok) {
       apiStatusBadge.className = 'status-pill ok';
       apiStatusBadge.querySelector('.status-text').textContent = 'API Connected';
     } else {
