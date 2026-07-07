@@ -28,11 +28,15 @@ class LLMService:
 
     async def lcel_for_simplification(self, previous_simplified: str, current_chunk: str) -> str:
         """Perform LCEL chain for content simplification."""
+        import asyncio
         lcels = RunnableSequence(self.prompt, self.client)
-        response = await lcels.ainvoke({
-            "previous_simplified": previous_simplified,
-            "current_chunk": current_chunk
-        })
+        response = await asyncio.wait_for(
+            lcels.ainvoke({
+                "previous_simplified": previous_simplified,
+                "current_chunk": current_chunk
+            }),
+            timeout=15.0
+        )
         return response.content
 
     def _generate_fallback_summary(self, text: str) -> str:
