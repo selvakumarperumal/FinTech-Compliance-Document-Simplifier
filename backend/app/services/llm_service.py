@@ -35,40 +35,6 @@ class LLMService:
         })
         return response.content
 
-    def _generate_fallback_summary(self, text: str) -> str:
-        """Generate a simulated simplified summary when LLM fails (e.g., offline/no internet)."""
-        lines = text.split('\n')
-        summary = []
-        summary.append("### [Offline Preview Mode] Simplified Compliance Summary")
-        summary.append("> Note: The NVIDIA LLM service is currently offline or unreachable. Displaying fallback rule-based summary preview.")
-        summary.append("")
-        summary.append("#### Key Compliance Requirements Identified:")
-        
-        count = 0
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            lower_line = line.lower()
-            if any(k in lower_line for k in ["shall", "must", "require", "comply", "obligation", "standard", "rule", "fee", "action", "penalty"]):
-                if 20 < len(line) < 200:
-                    summary.append(f"- **Requirement**: {line}")
-                    count += 1
-            if count >= 6:
-                break
-                
-        if count == 0:
-            summary.append("- **General Requirement**: Entities must adhere to all stated guidelines, maintain appropriate documentation, and ensure internal controls are active.")
-            summary.append("- **Audit Log**: Keep detailed logs of all compliance actions and revisions for audit checks.")
-            summary.append("- **Security Standard**: Ensure transport encryption and access controls are fully enforced.")
-            
-        summary.append("\n#### Plain Language Translation:")
-        summary.append("1. **Adhere to Obligations**: Carefully follow the detailed rules above.")
-        summary.append("2. **Document Action**: Ensure all transactions and adjustments are log-verifiable.")
-        summary.append("3. **Regular Auditing**: Periodically inspect records for accuracy and security compliance.")
-        
-        return "\n".join(summary)
-
     async def simplify_content(self, content: List[Document]) -> str:
         """Simplify the provided content using the LLM."""
         chunks = self.text_splitter.split_documents(content)
@@ -86,10 +52,8 @@ class LLMService:
                 responses.append(response)
                 previous_simplified = response
             except Exception as e:
-                logger.error(f"Failed to process chunk via LLM: {repr(e)}. Using fallback preview summarizer.")
-                fallback_response = self._generate_fallback_summary(chunk_text)
-                responses.append(fallback_response)
-                previous_simplified = fallback_response
+                logger.error(f"Failed to process chunk {i+1} via LLM: {str(e)}")
+                raise RuntimeError(f"Failed to process chunk {i+1} via LLM: {str(e)}")
 
         return "\n".join(responses)
 
