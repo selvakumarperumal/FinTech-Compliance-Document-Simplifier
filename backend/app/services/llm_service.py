@@ -1,4 +1,4 @@
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.services.prompts import ComplianceSimplifierPrompts
 from app.config import settings
@@ -12,11 +12,12 @@ logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self, model: str):
-        """Initialize the LLM service with the specified NVIDIA model."""
+        """Initialize the LLM service with the specified Google Gemini model."""
         self.model = model
-        self.client = ChatNVIDIA(
+        api_key = settings.google_api_key.get_secret_value() if settings.google_api_key else None
+        self.client = ChatGoogleGenerativeAI(
             model=self.model,
-            api_key=settings.nvidia_api_key.get_secret_value(),
+            google_api_key=api_key,
             temperature=0.1,
         )
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -24,7 +25,7 @@ class LLMService:
             chunk_overlap=500,
         )
         self.prompt = ComplianceSimplifierPrompts.custom_string_template()
-        logger.info(f"LLMService initialized with NVIDIA model: {self.model}")
+        logger.info(f"LLMService initialized with Google Gemini model: {self.model}")
 
     async def lcel_for_simplification(self, previous_simplified: str, current_chunk: str) -> str:
         """Perform LCEL chain for content simplification."""
@@ -61,7 +62,7 @@ class LLMService:
 async def simplify_content_service(content: List[Document], model: str = None) -> dict:
     """Service function to simplify content."""
     if model is None or model.strip() == "" or model.strip().lower() == "string":
-        model = settings.nvidia_model_name
+        model = settings.google_model_name
     
     llm_service = LLMService(model=model)
     simplified = await llm_service.simplify_content(content)
