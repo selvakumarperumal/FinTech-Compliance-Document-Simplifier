@@ -40,8 +40,31 @@ class ComplianceSimplifierPrompts:
         try:
             class ComplianceStringTemplate(StringPromptTemplate):
                 def format(self, **kwargs: Any) -> str:
-                    previous = kwargs.get("previous_simplified", "").strip()
-                    current = kwargs.get("current_chunk", "").strip()
+                    previous = kwargs.get("previous_simplified", "")
+                    if isinstance(previous, list):
+                        parts = []
+                        for part in previous:
+                            if isinstance(part, str):
+                                parts.append(part)
+                            elif isinstance(part, dict) and "text" in part:
+                                parts.append(part["text"])
+                        previous = "".join(parts)
+                    elif not isinstance(previous, str):
+                        previous = str(previous)
+                    previous = previous.strip()
+
+                    current = kwargs.get("current_chunk", "")
+                    if isinstance(current, list):
+                        parts = []
+                        for part in current:
+                            if isinstance(part, str):
+                                parts.append(part)
+                            elif isinstance(part, dict) and "text" in part:
+                                parts.append(part["text"])
+                        current = "".join(parts)
+                    elif not isinstance(current, str):
+                        current = str(current)
+                    current = current.strip()
                     
                     if not current:
                         raise ValueError("Current chunk cannot be empty")

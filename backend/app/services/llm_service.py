@@ -3,11 +3,26 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.services.prompts import ComplianceSimplifierPrompts
 from app.config import settings
 from langchain_core.runnables import RunnableSequence
-from typing import List
+from typing import List, Any
 from langchain_core.documents import Document
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def coerce_content_to_string(content: Any) -> str:
+    """Safely coerce message content (string or list of dicts) to a string."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and "text" in part:
+                parts.append(part["text"])
+        return "".join(parts)
+    return str(content) if content is not None else ""
 
 
 class LLMService:
@@ -34,7 +49,7 @@ class LLMService:
             "previous_simplified": previous_simplified,
             "current_chunk": current_chunk
         })
-        return response.content
+        return coerce_content_to_string(response.content)
 
     async def simplify_content(self, content: List[Document]) -> str:
         """Simplify the provided content using the LLM."""
